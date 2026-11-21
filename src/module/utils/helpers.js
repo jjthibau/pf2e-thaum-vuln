@@ -6,17 +6,16 @@ import {
 } from ".";
 
 function getMWTargets(t) {
-  let targs = new Array();
-  for (let token of canvas.tokens.objects.children) {
-    if (
-      (t.actor.sourceId && token?.actor?.sourceId === t.actor.sourceId) ||
-      (t.actor.prototypeToken?.name &&
-        token?.actor?.prototypeToken?.name === t.actor.prototypeToken?.name)
-    ) {
-      targs.push(token.actor.uuid);
-    }
-  }
-  return targs;
+  const creature = t.document.baseActor ?? t.actor;
+  const matches = canvas.tokens.placeables.filter((token) => {
+    const candidate = token.document.baseActor ?? token.actor;
+    return (
+      candidate &&
+      (candidate.uuid === creature.uuid ||
+        (creature.sourceId && creature.sourceId === candidate.sourceId))
+    );
+  });
+  return [...new Set(matches.map((token) => token.actor.uuid))];
 }
 
 /**
@@ -207,7 +206,18 @@ function getEsotericLore(actor) {
   return slugs.reduce((lore, slug) => lore ?? actor.skills[slug], undefined);
 }
 
+function clearEVFlags(actor) {
+  return actor.update({
+    "flags.pf2e-thaum-vuln.activeEV": false,
+    "flags.pf2e-thaum-vuln.-=EVMode": null,
+    "flags.pf2e-thaum-vuln.-=EVValue": null,
+    "flags.pf2e-thaum-vuln.-=primaryEVTarget": null,
+    "flags.pf2e-thaum-vuln.-=effectSource": null,
+  });
+}
+
 export {
+  clearEVFlags,
   targetEVPrimaryTarget,
   getMWTargets,
   getEffectOnActor,

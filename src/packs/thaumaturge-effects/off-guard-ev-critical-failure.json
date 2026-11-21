@@ -8,11 +8,9 @@
     },
     "rules": [
       {
-        "key": "FlatModifier",
-        "selector": "ac",
-        "slug": "off-guard",
-        "type": "circumstance",
-        "value": -2
+        "key": "GrantItem",
+        "uuid": "Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg",
+        "inMemoryOnly": true
       }
     ],
     "slug": "off-guard-ev-critical-failure",

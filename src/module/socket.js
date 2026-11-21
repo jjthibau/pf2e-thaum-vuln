@@ -15,6 +15,7 @@ import {
 import { getImplement } from "./implements/helpers.js";
 
 let socket;
+const pendingEffectWrites = new Map();
 
 Hooks.once("socketlib.ready", () => {
   socket = socketlib.registerModule("pf2e-thaum-vuln");
@@ -166,7 +167,28 @@ async function _socketCreateEffectsOnActors(
 }
 
 async function _socketCreateEffectOnTarget(aID, effect, evTargets, iwrData) {
+  return serializeEffectWrite(aID, () =>
+    applyTargetEffects(aID, effect, evTargets, iwrData)
+  );
+}
+
+// Handle duplicate requests against the state left by the first write.
+async function serializeEffectWrite(key, write) {
+  const previous = pendingEffectWrites.get(key);
+  const operation = (previous ?? Promise.resolve()).catch(() => {}).then(write);
+  pendingEffectWrites.set(key, operation);
+  try {
+    await operation;
+  } finally {
+    if (pendingEffectWrites.get(key) === operation) {
+      pendingEffectWrites.delete(key);
+    }
+  }
+}
+
+async function applyTargetEffects(aID, effect, evTargets, iwrData) {
   const a = await fromUuid(aID);
+  if (!a) return;
   // We can't use effect.sourceId because this isn't an EffectPF2e object
   // yet and doesn't have that getter.
   const eID = effect._stats.compendiumSource;
@@ -177,21 +199,29 @@ async function _socketCreateEffectOnTarget(aID, effect, evTargets, iwrData) {
     } else if (eID === PERSONAL_ANTITHESIS_TARGET_UUID) {
       iwrData = Math.floor(a.level / 2) + 2;
     }
-    a.setFlag("pf2e-thaum-vuln", "EVValue", iwrData);
+    await a.setFlag("pf2e-thaum-vuln", "EVValue", iwrData);
   }
 
   effect.name = effect.name + ` (${a.name})`;
-  for (let targ of evTargets) {
-    let tg = await fromUuid(targ);
-    if (tg.actor) {
-      tg = tg.actor;
-    }
+  const targets = new Set();
+  for (const targ of new Set(evTargets)) {
+    const document = await fromUuid(targ);
+    const tg = document?.actor ?? document;
+    if (!tg || targets.has(tg.uuid)) continue;
+    targets.add(tg.uuid);
+    const hasEffect = (sourceId) =>
+      tg.itemTypes.effect.some(
+        (existing) =>
+          existing.sourceId === sourceId &&
+          existing.system.context?.origin?.actor === a.uuid
+      );
+    const toCreate = [];
 
     if (
       (eID === MORTAL_WEAKNESS_TARGET_UUID ||
         eID === PERSONAL_ANTITHESIS_TARGET_UUID ||
         eID === BREACHED_DEFENSES_TARGET_UUID) &&
-      a.getFlag("pf2e-thaum-vuln", "primaryEVTarget") === targ
+      a.getFlag("pf2e-thaum-vuln", "primaryEVTarget") === tg.uuid
     ) {
       const primaryEVTargetEffect = await createEffectData(
         PRIMARY_TARGET_EFFECT_UUID,
@@ -213,22 +243,24 @@ async function _socketCreateEffectOnTarget(aID, effect, evTargets, iwrData) {
           "modules/pf2e-thaum-vuln/assets/breached-defenses-primary.webp";
       }
 
-      await tg.createEmbeddedDocuments("Item", [
-        primaryEffect,
-        primaryEVTargetEffect,
-      ]);
-    } else {
-      await tg.createEmbeddedDocuments("Item", [effect]);
+      if (!hasEffect(eID)) toCreate.push(primaryEffect);
+      if (!hasEffect(PRIMARY_TARGET_EFFECT_UUID))
+        toCreate.push(primaryEVTargetEffect);
+    } else if (!hasEffect(eID)) {
+      toCreate.push(effect);
     }
+    if (toCreate.length) await tg.createEmbeddedDocuments("Item", toCreate);
   }
   return;
 }
 
 //Deletes the effect from the actor passed to the method
 async function _socketDeleteEVEffect(effects) {
-  for (let effect of effects) {
-    effect = await fromUuid(effect);
-    effect.delete();
+  for (const uuid of new Set(effects)) {
+    await serializeEffectWrite(uuid, async () => {
+      const effect = await fromUuid(uuid);
+      if (effect?.actor?.items.has(effect.id)) await effect.delete();
+    });
   }
 }
 

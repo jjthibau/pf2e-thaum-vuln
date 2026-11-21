@@ -47,6 +47,7 @@
       "warn": {
         "exploitVulnerability": {
           "targetCount": "Select one Thaumaturge token and target one creature.",
+          "oncePerRound": "This character has already used Exploit Vulnerability this round.",
           "noExploitVulnerability": "This actor does not have the ability to Exploit Vulnerability",
           "noEsotericLoreSkill": "This actor does not have the Esoteric Lore skill",
           "noMatchingDC": "No matching DC for target",

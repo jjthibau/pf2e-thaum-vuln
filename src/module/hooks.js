@@ -7,6 +7,7 @@ import {
   GLIMPSE_VULNERABILITY_EFFECT_UUID,
 } from "./utils/index.js";
 import {
+  clearEVFlags,
   hasFeat,
   isThaumaturge,
   targetEVPrimaryTarget,
@@ -174,20 +175,17 @@ Hooks.on("pf2e.restForTheNight", (actor) => {
 });
 
 //sets pertinent flags when one of the Exploit Vulnerability effects are deleted
-Hooks.on("deleteItem", async (item) => {
+Hooks.on("deleteItem", async (item, options) => {
   const sa = item.parent;
   if (
+    !options?.pf2eThaumVulnReplacing &&
     (item.sourceId === MORTAL_WEAKNESS_EFFECT_UUID ||
       item.sourceId === PERSONAL_ANTITHESIS_EFFECT_UUID ||
       item.sourceId === BREACHED_DEFENSES_EFFECT_UUID ||
       item.sourceId === GLIMPSE_VULNERABILITY_EFFECT_UUID) &&
     game.user === sa.primaryUpdater
   ) {
-    await sa.setFlag("pf2e-thaum-vuln", "activeEV", false);
-    await sa.unsetFlag("pf2e-thaum-vuln", "EVMode");
-    await sa.unsetFlag("pf2e-thaum-vuln", "EVValue");
-    await sa.unsetFlag("pf2e-thaum-vuln", "primaryEVTarget");
-    await sa.unsetFlag("pf2e-thaum-vuln", "effectSource");
+    await clearEVFlags(sa);
   }
 });
 

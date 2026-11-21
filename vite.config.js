@@ -37,7 +37,7 @@ const config = Vite.defineConfig(({ command, mode }) => {
         },
       },
       ...viteStaticCopy({
-        targets: [{ src: "README.md", dest: "." }],
+        targets: [{ src: ["README.md", "LICENSE"], dest: "." }],
       })
     );
   } else {
